@@ -24,8 +24,8 @@ jobs:
     - name: 3. Instalar dependências do sistema e do Python
       run: |
         sudo apt-get update
-        sudo playwright install-deps
         pip install -r requirements.txt
+        sudo playwright install-deps
     
     - name: 4. Instalar navegadores do Playwright
       run: playwright install
