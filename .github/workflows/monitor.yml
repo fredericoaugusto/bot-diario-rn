@@ -2,11 +2,11 @@ name: Monitor Diário Oficial RN
 
 on:
   schedule:
-  # Roda todos os dias às 9:00 UTC (6:00 no horário de Brasília)
-  - cron: '0 9 * * *'
-  # Roda todos os dias às 21:00 UTC (18:00 no horário de Brasília)
-  - cron: '0 21 * * *'
-  workflow_dispatch: # Permite rodar manualmente pela aba Actions do GitHub
+    # Roda todos os dias às 9:00 UTC (6:00 no horário de Brasília)
+    - cron: '0 9 * * *'
+    # Roda todos os dias às 21:00 UTC (18:00 no horário de Brasília)
+    - cron: '0 21 * * *'
+  workflow_dispatch: # Permite rodar manually pela aba Actions do GitHub
 
 jobs:
   monitorar:
@@ -21,23 +21,23 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: 2.5 Instalar Playwright CLI
-      run: pip install playwright
+    - name: 3. Adicionar pasta de scripts do Python ao PATH
+      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
 
-    - name: 3. Instalar bibliotecas Python
+    - name: 4. Instalar bibliotecas Python
       run: pip install -r requirements.txt
 
-    - name: 4. Instalar Playwright e suas dependências de sistema
-      run: python -m playwright install --with-deps
+    - name: 5. Instalar Playwright e suas dependências de sistema
+      run: playwright install --with-deps
 
-    - name: 5. Rodar o Bot de Monitoramento
+    - name: 6. Rodar o Bot de Monitoramento
       env:
         EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
         EMAIL_SENHA: ${{ secrets.EMAIL_SENHA }}
         EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
       run: python bot.py
 
-    - name: 6. Fazer commit do histórico atualizado
+    - name: 7. Fazer commit do histórico atualizado
       run: |
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'actions@github.com'
