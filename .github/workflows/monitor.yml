@@ -25,7 +25,7 @@ jobs:
       run: pip install -r requirements.txt
 
     - name: 4. Instalar Playwright e suas dependências de sistema
-        run: playwright install --with-deps
+      run: python -m playwright install --with-deps
 
     - name: 5. Rodar o Bot de Monitoramento
       env:
