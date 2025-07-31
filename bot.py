@@ -26,20 +26,27 @@ def busca_sequencial_robusta(palavras_do_nome, texto_da_pagina):
 
 def processar_pdf(url_pdf, titulo_diario, session, historico):
     print(f"\n--- Processando: {titulo_diario} ---")
+    print(f"URL: {url_pdf}")
+    
     try:
         if url_pdf in historico:
             print("PDF já processado anteriormente. Pulando.")
             return []
 
+        print("Baixando PDF...")
         response = session.get(url_pdf, timeout=120)
         response.raise_for_status()
         
         achados_do_pdf = []
 
+        print("Abrindo PDF com pdfplumber...")
         with pdfplumber.open(io.BytesIO(response.content)) as pdf:
             print(f"O PDF tem {len(pdf.pages)} páginas.")
+            
             for i, pagina in enumerate(pdf.pages):
+                print(f"Processando página {i + 1}...")
                 texto_da_pagina = pagina.extract_text()
+                
                 if texto_da_pagina:
                     texto_da_pagina_lower = texto_da_pagina.lower().replace('\n', ' ')
                     
@@ -53,6 +60,7 @@ def processar_pdf(url_pdf, titulo_diario, session, historico):
                         cpf_encontrado = cpf and cpf in texto_da_pagina_lower
 
                         if nome_encontrado or inscricao_encontrada or cpf_encontrado:
+                            print(f"ENCONTRADO! {nome_completo} na página {i + 1}")
                             achados_do_pdf.append({
                                 'pessoa': pessoa,
                                 'pagina': i + 1,
@@ -62,10 +70,12 @@ def processar_pdf(url_pdf, titulo_diario, session, historico):
                                 'inscricao_encontrada': inscricao_encontrada,
                                 'cpf_encontrado': cpf_encontrado
                             })
-                            # Para evitar múltiplos achados da mesma pessoa no mesmo PDF e poluir o log
-                            # A lógica de formatação de e-mail cuidará de agrupar os resultados
+                            # Para evitar múltiplos achados da mesma pessoa no mesmo PDF
                             break 
+        
+        print(f"Processamento concluído. Achados: {len(achados_do_pdf)}")
         return achados_do_pdf
+        
     except Exception as e:
         print(f"Erro ao processar o PDF {url_pdf}: {e}")
         return []
@@ -93,60 +103,119 @@ def enviar_email_de_alerta(corpo_email):
     except Exception as e:
         print(f"Erro ao enviar e-mail: {e}")
 
-def main():
+def buscar_edicoes_extras(session, historico):
+    """Busca edições extras do diário oficial"""
+    print("\n=== BUSCANDO EDIÇÕES EXTRAS ===")
+    achados_extras = []
+    
     try:
-        with open("historico_alertas.json", "r") as f:
-            historico = set(json.load(f))
-    except FileNotFoundError:
-        historico = set()
-
-    session = requests.Session()
-    todos_os_achados = []
-
-    # Processa edições extras
-    try:
+        print("Acessando página de edições extras...")
         response = session.get("https://www.diariooficial.rn.gov.br/dei/dorn3/", timeout=30)
         response.raise_for_status()
+        
         soup = BeautifulSoup(response.content, 'html.parser')
+        links_encontrados = 0
+        
         for link in soup.find_all('a'):
             texto_do_link = link.get_text(strip=True)
             if "Edição Extra" in texto_do_link:
+                links_encontrados += 1
                 url_extra = link.get('href')
+                print(f"Link encontrado: {texto_do_link} -> {url_extra}")
+                
                 if url_extra and url_extra.endswith('.pdf'):
-                    todos_os_achados.extend(processar_pdf(url_extra, texto_do_link, session, historico))
+                    achados_extras.extend(processar_pdf(url_extra, texto_do_link, session, historico))
+        
+        print(f"Total de links de edições extras encontrados: {links_encontrados}")
+        
     except Exception as e:
         print(f"Erro ao buscar edições extras: {e}")
+    
+    return achados_extras
 
-    # Processa edição do dia
+def buscar_edicao_do_dia(session, historico):
+    """Busca a edição do dia usando Playwright"""
+    print("\n=== BUSCANDO EDIÇÃO DO DIA ===")
+    achados_do_dia = []
+    
     with sync_playwright() as p:
         try:
+            print("Iniciando browser...")
             browser = p.chromium.launch(headless=True)
             page = browser.new_page()
+            
             pdf_url_interceptada = None
+            
             def interceptar_requisicao(request):
                 nonlocal pdf_url_interceptada
                 if "cepebr-prod.s3.sa-east-1.amazonaws.com" in request.url and request.url.endswith(".pdf"):
                     pdf_url_interceptada = request.url.split('?')[0]
+                    print(f"PDF interceptado: {pdf_url_interceptada}")
+            
             page.on("request", interceptar_requisicao)
+            
             data_hoje_obj = datetime.now()
             data_hoje_url = data_hoje_obj.strftime('%d-%m-%Y')
             titulo_diario_dia = f"Diário Oficial do Dia {data_hoje_obj.strftime('%d/%m/%Y')}"
+            
             url_visualizador = f"https://deirn.sdoe.com.br/diariooficialweb/#/visualizar-jornal?dataPublicacao={data_hoje_url}&diario=MTIx&extra=false"
+            print(f"Acessando: {url_visualizador}")
+            
             page.goto(url_visualizador, timeout=90000)
-            for _ in range(20):
-                if pdf_url_interceptada: break
+            
+            # Aguarda interceptar o PDF
+            for i in range(20):
+                if pdf_url_interceptada: 
+                    break
+                print(f"Aguardando PDF... {i+1}/20")
                 time.sleep(1)
+            
             browser.close()
+            
             if pdf_url_interceptada:
-                todos_os_achados.extend(processar_pdf(pdf_url_interceptada, titulo_diario_dia, session, historico))
+                print(f"PDF do dia encontrado: {pdf_url_interceptada}")
+                achados_do_dia.extend(processar_pdf(pdf_url_interceptada, titulo_diario_dia, session, historico))
+            else:
+                print("PDF do dia não foi interceptado.")
+                
         except Exception as e:
-            print(f"Ocorreu um erro com o Playwright: {e}")
+            print(f"Erro com o Playwright: {e}")
+    
+    return achados_do_dia
+
+def main():
+    print("=== INICIANDO BOT DE MONITORAMENTO ===")
+    
+    # Carrega histórico
+    try:
+        with open("historico_alertas.json", "r") as f:
+            historico = set(json.load(f))
+        print(f"Histórico carregado: {len(historico)} PDFs já processados")
+    except FileNotFoundError:
+        historico = set()
+        print("Nenhum histórico encontrado. Iniciando do zero.")
+
+    session = requests.Session()
+    todos_os_achados = []
+
+    # 1. Busca edições extras
+    todos_os_achados.extend(buscar_edicoes_extras(session, historico))
+
+    # 2. Busca edição do dia
+    todos_os_achados.extend(buscar_edicao_do_dia(session, historico))
+
+    print(f"\n=== RESUMO FINAL ===")
+    print(f"Total de achados: {len(todos_os_achados)}")
 
     if not todos_os_achados:
-        print("\nNenhum novo alerta encontrado. Encerrando.")
+        print("Nenhum novo alerta encontrado. Encerrando.")
         return
 
-    corpo_email = "<h1>Alerta de Monitoramento do Diário Oficial RN</h1><p>Encontramos os seguintes resultados novos:</p>"
+    # Monta e envia o e-mail
+    corpo_email = "<h1>🚨 Alerta de Monitoramento do Diário Oficial RN</h1>"
+    corpo_email += f"<p><strong>Data/Hora:</strong> {datetime.now().strftime('%d/%m/%Y às %H:%M:%S')}</p>"
+    corpo_email += f"<p>Encontramos {len(todos_os_achados)} resultado(s) novo(s):</p>"
+    
     novos_pdfs_processados = set()
     
     # Agrupa os achados por pessoa para formatar o e-mail
@@ -158,7 +227,7 @@ def main():
         achados_por_pessoa[nome_pessoa].append(achado)
 
     for nome_pessoa, lista_de_achados in achados_por_pessoa.items():
-        corpo_email += f"<hr><h2>Resultados para: {nome_pessoa}</h2>"
+        corpo_email += f"<hr><h2>📋 Resultados para: {nome_pessoa}</h2>"
         for achado in lista_de_achados:
             pagina = achado['pagina']
             url_pdf = achado['url_pdf']
@@ -170,20 +239,27 @@ def main():
             if achado['cpf_encontrado']: identificadores.append("CPF")
             
             corpo_email += f"""
-            <p>
-                <b>Fonte:</b> {titulo_diario}<br>
-                <b>Itens Encontrados:</b> {', '.join(identificadores)}<br>
-                <b>Página:</b> {pagina}<br>
-                <b>Link para o Diário:</b> <a href="{url_pdf}">Clique aqui para abrir</a>
-            </p>
+            <div style="background: #f5f5f5; padding: 15px; margin: 10px 0; border-left: 4px solid #007cba;">
+                <p><strong>📄 Fonte:</strong> {titulo_diario}</p>
+                <p><strong>🔍 Itens Encontrados:</strong> {', '.join(identificadores)}</p>
+                <p><strong>📖 Página:</strong> {pagina}</p>
+                <p><strong>🔗 Link:</strong> <a href="{url_pdf}" target="_blank">Abrir Diário Oficial</a></p>
+            </div>
             """
             novos_pdfs_processados.add(url_pdf)
 
+    corpo_email += "<hr><p><em>Este é um alerta automático do sistema de monitoramento.</em></p>"
+
+    print("Enviando e-mail...")
     enviar_email_de_alerta(corpo_email)
 
+    # Atualiza e salva histórico
     historico.update(novos_pdfs_processados)
     with open("historico_alertas.json", "w") as f:
         json.dump(list(historico), f, indent=2)
+    
+    print(f"Histórico atualizado: {len(historico)} PDFs processados no total")
+    print("=== BOT FINALIZADO ===")
 
 if __name__ == "__main__":
     main()

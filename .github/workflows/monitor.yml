@@ -3,20 +3,22 @@ name: Monitor Diário Oficial RN
 on:
   schedule:
     # Roda todos os dias às 9:00 UTC (6:00 no horário de Brasília)
-    - cron: '17 22 * * *'
+    - cron: '35 22 * * *'
     # Roda todos os dias às 21:00 UTC (18:00 no horário de Brasília)
-    - cron: '29 22 * * *'
-  workflow_dispatch: # Permite rodar manually pela aba Actions do GitHub
+    - cron: '0 21 * * *'
+  workflow_dispatch: # Permite rodar manualmente pela aba Actions do GitHub
 
 jobs:
   monitorar:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
+    permissions:      # <-- A CORREÇÃO ESSENCIAL
+      contents: write # <--
+    
     steps:
     - name: Checkout do código
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Busca todo o histórico
 
     - name: Configurar Python
       uses: actions/setup-python@v4
@@ -31,6 +33,16 @@ jobs:
     - name: Instalar navegadores Playwright
       run: python -m playwright install --with-deps chromium
 
+    - name: Verificar se existe histórico
+      run: |
+        if [ -f "historico_alertas.json" ]; then
+          echo "Arquivo de histórico encontrado:"
+          cat historico_alertas.json
+        else
+          echo "Nenhum arquivo de histórico encontrado. Será criado um novo."
+          echo "[]" > historico_alertas.json
+        fi
+
     - name: Rodar o Bot de Monitoramento
       env:
         EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
@@ -38,14 +50,20 @@ jobs:
         EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
       run: python bot.py
 
+    - name: Verificar mudanças no histórico
+      run: |
+        echo "Conteúdo atual do histórico:"
+        cat historico_alertas.json
+
     - name: Commit do histórico atualizado
       run: |
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'actions@github.com'
-        git add -A
+        git add historico_alertas.json
         if ! git diff --staged --quiet; then
-          git commit -m "Atualiza histórico de alertas"
+          git commit -m "Atualiza histórico de alertas - $(date '+%d/%m/%Y %H:%M')"
           git push
+          echo "Histórico atualizado e enviado para o repositório"
         else
-          echo "Nenhuma mudança para fazer commit"
+          echo "Nenhuma mudança no histórico para fazer commit"
         fi
