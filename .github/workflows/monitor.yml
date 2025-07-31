@@ -13,35 +13,37 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: 1. Checkout do código
+    - name: Checkout do código
       uses: actions/checkout@v4
 
-    - name: 2. Configurar Python
+    - name: Configurar Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    - name: 3. Instalar bibliotecas Python
-      run: pip install -r requirements.txt
+    - name: Instalar dependências Python
+      run: |
+        pip install --upgrade pip
+        pip install -r requirements.txt
 
-    - name: 4. Instalar Playwright
-      run: pip install playwright
-
-    - name: 5. Instalar navegadores do Playwright
+    - name: Instalar navegadores Playwright
       run: python -m playwright install --with-deps chromium
 
-    - name: 6. Rodar o Bot de Monitoramento
+    - name: Rodar o Bot de Monitoramento
       env:
         EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
         EMAIL_SENHA: ${{ secrets.EMAIL_SENHA }}
         EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
       run: python bot.py
 
-    - name: 7. Fazer commit do histórico atualizado
+    - name: Commit do histórico atualizado
       run: |
         git config --global user.name 'GitHub Actions Bot'
         git config --global user.email 'actions@github.com'
-        git add historico_alertas.json
-        # Só faz o commit se houver mudanças no arquivo
-        git diff --staged --quiet || git commit -m "Atualiza histórico de alertas"
-        git push || echo "Nada para fazer commit ou erro no push"
+        git add -A
+        if ! git diff --staged --quiet; then
+          git commit -m "Atualiza histórico de alertas"
+          git push
+        else
+          echo "Nenhuma mudança para fazer commit"
+        fi
