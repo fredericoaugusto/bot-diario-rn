@@ -6,42 +6,41 @@ on:
     - cron: '0 9 * * *'
     # Roda todos os dias às 21:00 UTC (18:00 no horário de Brasília)
     - cron: '0 21 * * *'
-  workflow_dispatch: # Permite rodar manually pela aba Actions do GitHub
+  workflow_dispatch:
 
 jobs:
   monitorar:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-    - name: 1. Checkout do código
-      uses: actions/checkout@v3
+      - name: 1. Checkout do código
+        uses: actions/checkout@v3
 
-    - name: 2. Configurar Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
+      - name: 2. Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
 
-    - name: 3. Adicionar pasta de scripts do Python ao PATH
-      run: echo "$HOME/.local/bin" >> $GITHUB_PATH
+      - name: 3. Instalar dependências Python
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-    - name: 4. Instalar bibliotecas Python
-      run: pip install -r requirements.txt
+      - name: 4. Instalar browsers e dependências do Playwright
+        run: python -m playwright install --with-deps
 
-    - name: 5. Instalar Playwright e suas dependências de sistema
-      run: playwright install --with-deps
+      - name: 5. Rodar o Bot de Monitoramento
+        env:
+          EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
+          EMAIL_SENHA: ${{ secrets.EMAIL_SENHA }}
+          EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
+        run: python bot.py
 
-    - name: 6. Rodar o Bot de Monitoramento
-      env:
-        EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
-        EMAIL_SENHA: ${{ secrets.EMAIL_SENHA }}
-        EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
-      run: python bot.py
-
-    - name: 7. Fazer commit do histórico atualizado
-      run: |
-        git config --global user.name 'GitHub Actions Bot'
-        git config --global user.email 'actions@github.com'
-        git add historico_alertas.json
-        # Só faz o commit se houver mudanças no arquivo
-        git diff --staged --quiet || git commit -m "Atualiza histórico de alertas"
-        git push
+      - name: 6. Commit do histórico atualizado
+        run: |
+          git config --global user.name 'GitHub Actions Bot'
+          git config --global user.email 'actions@github.com'
+          git add historico_alertas.json
+          git diff --staged --quiet || git commit -m "Atualiza histórico de alertas"
+          git push
