@@ -2,47 +2,46 @@ name: Monitor Diário Oficial RN
 
 on:
   schedule:
+    # Roda todos os dias às 9:00 UTC (6:00 no horário de Brasília)
     - cron: '0 9 * * *'
+    # Roda todos os dias às 21:00 UTC (18:00 no horário de Brasília)
     - cron: '0 21 * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Permite rodar manually pela aba Actions do GitHub
 
 jobs:
   monitorar:
     runs-on: ubuntu-latest
-    container:
-      image: mcr.microsoft.com/playwright/python:v1.54.0-noble
-      options: --user 1001
-    timeout-minutes: 30
 
     steps:
-      - name: Checkout do repositório
-        uses: actions/checkout@v3
+    - name: 1. Checkout do código
+      uses: actions/checkout@v4
 
-      - name: Configurar Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.10'
+    - name: 2. Configurar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
 
-      - name: Instalar biblioteca Playwright Python
-        run: python -m pip install --upgrade pip && pip install playwright
+    - name: 3. Instalar bibliotecas Python
+      run: pip install -r requirements.txt
 
-      - name: Instalar browsers com dependências
-        run: python -m playwright install --with-deps
+    - name: 4. Instalar Playwright
+      run: pip install playwright
 
-      - name: Instalar outras dependências Python
-        run: pip install -r requirements.txt
+    - name: 5. Instalar navegadores do Playwright
+      run: python -m playwright install --with-deps chromium
 
-      - name: Rodar Bot de Monitoramento
-        env:
-          EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
-          EMAIL_SENHA: ${{ secrets.EMAIL_SENHA }}
-          EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
-        run: python bot.py
+    - name: 6. Rodar o Bot de Monitoramento
+      env:
+        EMAIL_REMETENTE: ${{ secrets.EMAIL_REMETENTE }}
+        EMAIL_SENHA: ${{ secrets.EMAIL_SENHA }}
+        EMAIL_DESTINATARIO: ${{ secrets.EMAIL_DESTINATARIO }}
+      run: python bot.py
 
-      - name: Commit do histórico atualizado
-        run: |
-          git config --global user.name 'GitHub Actions Bot'
-          git config --global user.email 'actions@github.com'
-          git add historico_alertas.json
-          git diff --staged --quiet || git commit -m "Atualiza histórico de alertas"
-          git push
+    - name: 7. Fazer commit do histórico atualizado
+      run: |
+        git config --global user.name 'GitHub Actions Bot'
+        git config --global user.email 'actions@github.com'
+        git add historico_alertas.json
+        # Só faz o commit se houver mudanças no arquivo
+        git diff --staged --quiet || git commit -m "Atualiza histórico de alertas"
+        git push || echo "Nada para fazer commit ou erro no push"
