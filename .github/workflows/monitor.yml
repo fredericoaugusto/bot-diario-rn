@@ -21,14 +21,11 @@ jobs:
       with:
         python-version: '3.10'
 
-    - name: 3. Instalar dependências do sistema e do Python
-      run: |
-        sudo apt-get update
-        pip install -r requirements.txt
-        sudo playwright install-deps
-    
-    - name: 4. Instalar navegadores do Playwright
-      run: playwright install
+    - name: 3. Instalar bibliotecas Python
+      run: pip install -r requirements.txt
+
+    - name: 4. Instalar Playwright e suas dependências de sistema
+        run: playwright install --with-deps
 
     - name: 5. Rodar o Bot de Monitoramento
       env:
