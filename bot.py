@@ -109,7 +109,7 @@ def processar_pdf(url_pdf, titulo_diario, session, historico):
 def enviar_email_de_alerta(corpo_email):
     remetente = os.environ.get("EMAIL_REMETENTE")
     senha = os.environ.get("EMAIL_SENHA")
-    destinatario = os.environ.get("EMAIL_DESTINATario")
+    destinatario = os.environ.get("EMAIL_DESTINATARIO")
 
     if not all([remetente, senha, destinatario]):
         print("Credenciais de e-mail não configuradas. Alerta não enviado.")
