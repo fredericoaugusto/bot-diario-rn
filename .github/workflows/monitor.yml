@@ -11,7 +11,8 @@ on:
 jobs:
   monitorar:
     runs-on: ubuntu-latest
-    permissions: contents: write
+    permissions:
+      contents: write
 
     steps:
     - name: Checkout do código
