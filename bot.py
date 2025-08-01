@@ -15,7 +15,6 @@ from bs4 import BeautifulSoup
 PESSOAS_PARA_BUSCAR = [
     {'nome': "Frederico Augusto Leite Lins", 'inscricao': "2021847", 'cpf': ""},
     {'nome': "Larissa Valdeci da Costa Silva", 'inscricao': "2025068", 'cpf': ""},
-    {'nome': "Poder Executivo", 'inscricao': "2025068", 'cpf': ""},
 ]
 
 def busca_sequencial_robusta(palavras_do_nome, texto_da_pagina):
