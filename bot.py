@@ -18,8 +18,14 @@ PESSOAS_PARA_BUSCAR = [
 ]
 
 def busca_sequencial_robusta(palavras_do_nome, texto_da_pagina):
+    """
+    Busca o nome completo como frase exata no texto, tolerando apenas espaços/quebras
+    de linha entre as palavras. Evita falsos positivos onde palavras do nome aparecem
+    em posições distantes na mesma página.
+    """
     try:
-        regex_busca = r'.*?'.join(r'\b' + re.escape(p) + r'\b' for p in palavras_do_nome)
+        # Usa \s+ entre as palavras: elas devem estar adjacentes (separadas só por espaço)
+        regex_busca = r'\s+'.join(r'\b' + re.escape(p) + r'\b' for p in palavras_do_nome)
         return re.search(regex_busca, texto_da_pagina, re.IGNORECASE) is not None
     except re.error:
         return False
